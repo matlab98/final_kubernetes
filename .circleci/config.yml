@@ -1,13 +1,65 @@
-# Use the latest 2.1 version of CircleCI pipeline process engine. See: https://circleci.com/docs/2.0/configuration-reference
-version: 2.1
-# Use a package of configuration called an orb.
-orbs:
-  # Declare a dependency on the welcome-orb
-  welcome: circleci/welcome-orb@0.4.1
-# Orchestrate or schedule a set of jobs
+version: 2
+
+# Workflows
+
 workflows:
-  # Name the workflow "welcome"
-  welcome:
-    # Run the welcome/run job in its own container
+  version: 2
+  test-and-deploy:
     jobs:
-      - welcome/run
+      - test-py3.6
+
+definitions:
+
+  images:
+
+    es-image: &es-image
+        image: docker.elastic.co/elasticsearch/elasticsearch:5.6.10
+        environment:
+          - discovery.type=single-node
+          - http.host=0.0.0.0
+          - transport.host=127.0.0.1
+          - xpack.security.enabled=false
+          - ES_JAVA_OPTS=-Xms768m -Xmx768m
+        command: /bin/bash -c "bin/elasticsearch-plugin install analysis-phonetic && bin/es-docker"
+
+  steps:
+    test-steps: &test-steps
+
+      - checkout
+
+      - setup_remote_docker
+
+      # This should go into custom primary image, here's only for the sake of explanation
+      - run:
+          name: Install Docker Compose
+          command: |
+            sudo apt-get install docker-compose
+
+      - run:
+          name: Start container and verify it's working
+          command: |
+            set -x
+            docker-compose up -d
+            docker run --network container:duckling \
+              appropriate/curl --retry 10 --retry-delay 1 --retry-connrefused http://localhost:8000/parse
+
+      - run:
+          name: Run python tests
+          # run this even when linting fails
+          when: always
+          command: |
+            # run tests
+            mkdir ~/test-reports
+            pytest --junitxml=~/test-reports/junit.xml
+
+
+jobs:
+  test-py3.6:
+    docker:
+      - image: circleci/python:3.6.6
+        environment:
+          PYTHON_VERSION: "3.6.6"
+          _JAVA_OPTIONS: "-Xms512m -Xmx1024m"
+      - image: docker:18.03.0-ce-git
+      - *es-image
+    steps: *test-steps
