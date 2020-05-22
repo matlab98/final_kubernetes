@@ -1,64 +1,15 @@
-# This code is licensed from CircleCI to the user under the MIT license. See
-# https://circleci.com/orbs/registry/licensing for details.
-commands:
-  helm-initialize:
-    description: Initializes the helm tiller service into the minikube cluster.
+jobs:
+  create-update:
+    docker:
+      - image: 'cimg/base:stable'
     steps:
-    - run:
-        command: |-
-          curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash &&
-          helm init --wait
-        name: Initialize Helm Tiller Service
-  initialize:
-    description: Establishes the entire minikube environment on the machine, ready
-      to perform tests.
-    steps:
-    - kubectl-install
-    - minikube-start
-    - helm-initialize
-  kubectl-install:
-    description: Installs the kubectl executable.
-    parameters:
-      version:
-        default: v1.10.0
-        type: string
-    steps:
-    - run:
-        command: |-
-          curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/<< parameters.version >>/bin/linux/amd64/kubectl &&
-          chmod +x kubectl &&
-          sudo mv kubectl /usr/local/bin/
-          mkdir -p ${HOME}/.kube && touch ${HOME}/.kube/config
-        name: Install Kubectl Executable
-  minikube-install:
-    description: Installs the minikube executable onto the system.
-    parameters:
-      version:
-        default: v0.30.0
-        type: string
-    steps:
-    - run:
-        command: curl -Lo minikube https://github.com/kubernetes/minikube/releases/download/<<
-          parameters.version >>/minikube-linux-amd64 && chmod +x minikube && sudo
-          mv minikube /usr/local/bin/
-        name: Install Minikube Executable
-  minikube-start:
-    description: Starts the minikube service.
-    parameters:
-      version:
-        default: v1.10.0
-        type: string
-    steps:
-    - minikube-install
-    - run:
-        command: sudo -E minikube start --vm-driver=none --cpus 2 --memory 2048 --kubernetes-version=<<
-          parameters.version >> &> $HOME/minikube.log 2>&1 < /dev/null
-        name: Start Minikube Cluster
-description: |
-  An orb containing common operations involving running minikube within CircleCI.
-executors:
-  default:
-    machine:
-      image: circleci/classic:latest
-jobs: {}
+      - checkout
+      - kube-orb/install-kubectl
+      - kube-orb/create-or-update-resource:
+          get-rollout-status: true
+          resource-file-path: tests/nginx-deployment/deployment.yaml
+          resource-name: deployment/nginx-deployment
+          show-kubectl-command: true
+orbs:
+  kube-orb: circleci/kubernetes@x.y.z
 version: 2.1
